@@ -51,6 +51,12 @@ WIRE_COLORS = {
 SIMON_COLORS = [("R", RED), ("B", BLUE), ("G", GREEN), ("Y", YELLOW)]
 
 # ---------------------------------------------------------------- HELPERS
+def shuffle_list(lst):
+    for i in range(len(lst) - 1, 0, -1):
+        j = random.randint(0, i)
+        lst[i], lst[j] = lst[j], lst[i]
+
+
 def beep(freq=880, ms=60):
     if freq <= 0:
         BUZZER.duty_u16(0)
@@ -428,7 +434,7 @@ def mod_password(state):
             x = random.choice(list(pool))
             letters.append(x)
             pool.discard(x)
-        random.shuffle(letters)
+        shuffle_list(letters)
         cols.append(letters)
     idx = [0] * 5  # current letter index per column
     col = 0
@@ -521,7 +527,7 @@ def main():
         title_screen()
         state = new_state()
         order = list(MODULES)
-        random.shuffle(order)
+        shuffle_list(order)
         i = 0
         while state["strikes"] < 3 and len(state["solved"]) < len(MODULES) and not expired(state):
             name, fn = order[i % len(order)]
