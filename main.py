@@ -57,6 +57,12 @@ def shuffle_list(lst):
         lst[i], lst[j] = lst[j], lst[i]
 
 
+def sample_list(population, k):
+    result = list(population)
+    shuffle_list(result)
+    return result[:k]
+
+
 def beep(freq=880, ms=60):
     if freq <= 0:
         BUZZER.duty_u16(0)
@@ -354,7 +360,7 @@ def mod_memory(state):
     for stage in range(1, 6):
         if expired(state): return
         big = random.randint(1, 4)
-        digits = random.sample([1, 2, 3, 4], 4)
+        digits = sample_list([1, 2, 3, 4], 4)
         clear()
         header(state)
         text("MEMORIA  etapa {}/5".format(stage), 4, 32, 2, ORANGE)
