@@ -8,7 +8,11 @@ import random
 import gc
 from machine import Pin, PWM
 
-from picographics import PicoGraphics, DISPLAY_PICO_EXPLORER, PEN_RGB332
+try:
+    from picographics import PicoGraphics, DISPLAY_PICO_EXPLORER
+except ImportError:
+    from picographics import PicoGraphics
+    DISPLAY_PICO_EXPLORER = 1
 
 # ---------------------------------------------------------------- HARDWARE
 BTN_A = Pin(12, Pin.IN, Pin.PULL_UP)
@@ -23,7 +27,7 @@ LEDS = [Pin(p, Pin.OUT) for p in (6, 7, 8, 9)]
 for l in LEDS:
     l.value(0)
 
-display = PicoGraphics(display=DISPLAY_PICO_EXPLORER, pen_type=PEN_RGB332, rotate=0)
+display = PicoGraphics(display=DISPLAY_PICO_EXPLORER)
 W, H = display.get_bounds()
 
 # Color pens (RGB332)
