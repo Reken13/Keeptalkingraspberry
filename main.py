@@ -41,7 +41,6 @@ ORG = display.create_pen(240, 130, 0)
 GRY = display.create_pen(100, 100, 100)
 BRN = display.create_pen(140, 80,  30)
 
-# Mapeamento fixo: indice do pino -> cor fisica do cabo
 WIRE_NAMES = ["AZUL",  "CASTANHO", "AMARELO", "VERDE", "VERMELHO"]
 WIRE_PENS  = [BLU,     BRN,        YEL,       GRN,     RED]
 
@@ -136,54 +135,49 @@ def show_fail(state, msg="FALHOU!"):
     time.sleep(2)
 
 # =============================================================
+# DIAGNOSTICO DE PINOS
+# Mostra o valor atual de cada pino (0=ligado ao GND, 1=solto).
+# Carrega A para sair.
+# =============================================================
+def pin_diagnostics():
+    while True:
+        clr()
+        txt("DIAGNOSTICO", 10, 10, 2, ORG)
+        txt("0=GND  1=solto", 10, 35, 1, GRY)
+        for i in range(5):
+            v = WIRE_PINS[i].value()
+            pen = GRN if v == 0 else RED
+            txt("GP{}  {}  {}".format(i+1, v, WIRE_NAMES[i]), 10, 60 + i*34, 2, pen)
+        txt("A para sair", 10, 230, 1, GRY)
+        upd()
+        time.sleep_ms(200)
+        if not BTN_A.value():
+            while not BTN_A.value(): time.sleep_ms(10)
+            return
+
+# =============================================================
 # MODULO 1: SEQUENCIA DE CABOS
-#
-# O ecra mostra todos os cabos ligados e a sequencia a puxar
-# (indicada com numeros de ordem sobre cada cabo).
-# O jogador puxa os cabos fisicamente na ordem correta.
-# Puxar o errado = erro imediato.
 # =============================================================
 def draw_cables(connected, seq, step):
-    """
-    connected : lista de indices de pinos ligados
-    seq       : lista de indices (dentro de connected) que formam a sequencia
-    step      : quantos cabos da sequencia ja foram puxados corretamente
-    """
     clr()
     n = len(connected)
     row_h = 185 // n
-
     for row, pin_idx in enumerate(connected):
         y = 38 + row * row_h
-        pen = WIRE_PENS[pin_idx]
-
-        # Determinar a posicao desta sequencia (1-based), se existir
         seq_pos = None
         for k, s in enumerate(seq):
-            if s == row:          # row = posicao dentro de connected
+            if s == row:
                 seq_pos = k + 1
                 break
-
-        # Barra do cabo: cinzenta se ja puxado, colorida se ainda ativo
-        already_pulled = (seq_pos is not None and seq_pos <= step)
-        display.set_pen(GRY if already_pulled else pen)
+        already = (seq_pos is not None and seq_pos <= step)
+        display.set_pen(GRY if already else WIRE_PENS[pin_idx])
         display.rectangle(30, y + 2, 130, row_h - 6)
-
-        # Numero de ordem da sequencia
         if seq_pos is not None:
-            label_col = GRY if already_pulled else BLK
-            txt(str(seq_pos), 40, y + (row_h - 6)//2 - 8, 2, label_col)
-
-        # Nome da cor a direita
-        name_col = GRY if already_pulled else WIRE_PENS[pin_idx]
-        txt(WIRE_NAMES[pin_idx], 165, y + 4, 1, name_col)
-
-    # Seta para o proximo cabo
+            txt(str(seq_pos), 40, y + (row_h-6)//2 - 8, 2, GRY if already else BLK)
+        txt(WIRE_NAMES[pin_idx], 165, y + 4, 1, GRY if already else WIRE_PENS[pin_idx])
     if step < len(seq):
-        next_row = seq[step]
-        arrow_y = 38 + next_row * row_h + row_h // 2 - 8
+        arrow_y = 38 + seq[step] * row_h + row_h // 2 - 8
         txt(">", 8, arrow_y, 2, YEL)
-
 
 def mod_cabos(state):
     connected = [i for i in range(5) if WIRE_PINS[i].value() == 0]
@@ -194,30 +188,34 @@ def mod_cabos(state):
         txt("CABOS", 4, 36, 2, ORG)
         txt("Liga 3-5 cabos", 8, 75, 2, WHT)
         txt("GP1-GP5 ao GND", 8, 105, 2, YEL)
-        txt("Y para saltar", 8, 205, 1, GRY)
+        txt("", 0, 0, 1, BLK)
+        # Mostrar valores atuais dos pinos
+        for i in range(5):
+            v = WIRE_PINS[i].value()
+            pen = GRN if v == 0 else RED
+            txt("GP{} = {}".format(i+1, v), 8, 135 + i*18, 1, pen)
+        txt("A=diagnostico  Y=saltar", 8, 228, 1, GRY)
         upd()
-        while read_btn() != "Y": time.sleep_ms(50)
+        b = read_btn()
+        if b == "A":
+            pin_diagnostics()
         return
 
-    # Gerar sequencia aleatoria: permutacao dos indices dentro de 'connected'
     seq = list(range(n))
     shuffle(seq)
-    # Usar apenas 3 cabos se houver 5 ligados (mais desafiante)
     seq_len = 3 if n == 5 else n
     seq = seq[:seq_len]
 
-    step = 0          # quantos cabos da sequencia ja foram puxados
+    step = 0
     init = [WIRE_PINS[i].value() for i in range(5)]
 
     while step < seq_len:
         if tl(state) == 0: return
-
         draw_cables(connected, seq, step)
         draw_hdr(state)
         txt("CABOS  {}/{}".format(step, seq_len), 4, 36, 2, ORG)
         upd()
 
-        # Esperar que um cabo seja puxado
         pulled = None
         while pulled is None:
             if tl(state) == 0: return
@@ -225,10 +223,9 @@ def mod_cabos(state):
             for i in range(5):
                 if WIRE_PINS[i].value() == 1 and init[i] == 0:
                     pulled = i
-                    init[i] = 1   # marcar como puxado
+                    init[i] = 1
                     break
 
-        # Verificar se o cabo puxado corresponde ao proximo da sequencia
         expected_pin = connected[seq[step]]
         if pulled == expected_pin:
             beep(660 + step * 110, 80)
@@ -255,7 +252,6 @@ def mod_simon(state):
     seq = []
     for _ in range(4):
         seq.append(random.randint(0, 3))
-
         for ci in seq:
             if tl(state) == 0: return
             simon_draw(ci); draw_hdr(state)
@@ -264,26 +260,20 @@ def mod_simon(state):
             simon_draw(-1); draw_hdr(state)
             txt("OBSERVA", 75, 232, 1, GRY); upd()
             time.sleep_ms(250)
-
         time.sleep_ms(300)
-
         for pos, ci in enumerate(seq):
             if tl(state) == 0: return
             simon_draw(-1); draw_hdr(state)
             txt("REPETE {}/{}".format(pos+1, len(seq)), 50, 232, 1, YEL); upd()
-
             b = read_btn()
             bi = {"A":0,"B":1,"X":2,"Y":3}[b]
             simon_draw(bi); draw_hdr(state)
             txt("REPETE {}/{}".format(pos+1, len(seq)), 50, 232, 1, YEL); upd()
             beep(SIMON_FREQ[bi], 100); time.sleep_ms(150)
-
             key = (not state["serial_odd"], min(state["strikes"], 2))
             if bi != SIMON_TABLE[key][ci]:
                 show_fail(state, "SIMON!"); return
-
         time.sleep_ms(500)
-
     show_ok(state)
 
 # =============================================================
@@ -301,7 +291,6 @@ def mod_senha(state):
                 seen.add(c); col.append(c)
         shuffle(col)
         cols.append(col[:6] if len(col) > 6 else col)
-
     idx = [0]*5; sel = 0
     while True:
         if tl(state) == 0: return
@@ -360,7 +349,6 @@ def jogar():
         if tl(state) == 0: break
         order[mi % len(order)](state)
         mi += 1
-
     won = state["solved"] >= len(MODULES) and state["strikes"] < 3 and tl(state) > 0
     clr(GRN if won else RED)
     txt("GANHOU!" if won else "BOOM...", 30, 80, 4, WHT)
