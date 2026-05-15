@@ -20,7 +20,7 @@ BUZZER = PWM(Pin(0))   # GP0 = buzzer. NO conectar cable aqui.
 BUZZER.duty_u16(0)
 
 # Cables fisicos: pin conectado a GND = intacto (LOW), suelto = cortado (HIGH)
-# GP1=MARRON  GP2=VERDE  GP3=AMARILLO  GP4=ROJO  GP5=AZUL
+# GP1=AZUL  GP2=MARRON  GP3=AMARILLO  GP4=VERDE  GP5=ROJO
 WIRE_PINS = [
     Pin(1, Pin.IN, Pin.PULL_UP),
     Pin(2, Pin.IN, Pin.PULL_UP),
@@ -42,21 +42,16 @@ ORG = display.create_pen(240, 130, 0)
 GRY = display.create_pen(100, 100, 100)
 BRN = display.create_pen(140, 80,  30)
 
-# Indice de color = indice de pin (0=MARRON/GP1 ... 4=AZUL/GP5)
-C_MARRON, C_VERDE, C_AMARILLO, C_ROJO, C_AZUL = 0, 1, 2, 3, 4
-WIRE_NAMES = ["MARRON", "VERDE", "AMARILLO", "ROJO", "AZUL"]
-WIRE_PENS  = [BRN,      GRN,     YEL,        RED,    BLU]
+# Indice 0=GP1 ... 4=GP5
+C_AZUL, C_MARRON, C_AMARILLO, C_VERDE, C_ROJO = 0, 1, 2, 3, 4
+WIRE_NAMES = ["AZUL",  "MARRON", "AMARILLO", "VERDE", "ROJO"]
+WIRE_PENS  = [BLU,     BRN,      YEL,        GRN,     RED]
 
-# Simon: 4 botones con colores asignados
-# Layout: A=arriba-izq  B=abajo-izq  X=arriba-der  Y=abajo-der
 SIMON_PENS  = [RED, BLU, GRN, YEL]
 SIMON_FREQ  = [440, 550, 660, 770]
 SIMON_POS   = [(15, 40), (15, 140), (125, 40), (125, 140)]
 SIMON_NAMES = ["A", "B", "X", "Y"]
-SIMON_BTNS  = [BTN_A, BTN_B, BTN_X, BTN_Y]
 
-# Tabla Simon: (serial_par, errores_tope2) -> {color: boton}
-# Colores: 0=R 1=B 2=G 3=Y | Botones: 0=A 1=B 2=X 3=Y
 SIMON_TABLE = {
     (True,  0): {0:0, 1:1, 2:2, 3:3},
     (True,  1): {0:1, 1:0, 2:3, 3:2},
@@ -152,19 +147,19 @@ def wires_rule(colors, n, odd):
             if colors[i] == c: return i
         return -1
     if n == 3:
-        if cnt(C_ROJO) == 0:                               return 1
-        if colors[n-1] == C_VERDE:                         return n-1
-        if cnt(C_AZUL) > 1:                                return last_of(C_AZUL)
+        if cnt(C_ROJO) == 0:                                return 1
+        if colors[n-1] == C_VERDE:                          return n-1
+        if cnt(C_AZUL) > 1:                                 return last_of(C_AZUL)
         return n-1
     if n == 4:
-        if cnt(C_ROJO) > 1 and odd:                        return last_of(C_ROJO)
-        if colors[n-1] == C_AMARILLO and cnt(C_ROJO) == 0: return 0
-        if cnt(C_AZUL) == 1:                               return 0
+        if cnt(C_ROJO) > 1 and odd:                         return last_of(C_ROJO)
+        if colors[n-1] == C_AMARILLO and cnt(C_ROJO) == 0:  return 0
+        if cnt(C_AZUL) == 1:                                return 0
         return 1
     # n == 5
-    if colors[n-1] == C_MARRON and odd:                    return 3
-    if cnt(C_ROJO) == 1 and cnt(C_AMARILLO) > 1:          return 0
-    if cnt(C_MARRON) == 0:                                 return 1
+    if colors[n-1] == C_MARRON and odd:                     return 3
+    if cnt(C_ROJO) == 1 and cnt(C_AMARILLO) > 1:           return 0
+    if cnt(C_MARRON) == 0:                                  return 1
     return 0
 
 def mod_cables(state):
@@ -180,7 +175,7 @@ def mod_cables(state):
         return
 
     n = len(connected)
-    colors = connected[:]   # indice pin == indice color en este setup
+    colors = connected[:]
     correct_pin = connected[wires_rule(colors, n, state["serial_odd"])]
 
     clr(); draw_hdr(state)
