@@ -16,11 +16,11 @@ BTN_B = Pin(13, Pin.IN, Pin.PULL_UP)
 BTN_X = Pin(14, Pin.IN, Pin.PULL_UP)
 BTN_Y = Pin(15, Pin.IN, Pin.PULL_UP)
 
-BUZZER = PWM(Pin(0))   # GP0 = buzzer. NO conectar cable aqui.
+BUZZER = PWM(Pin(0))   # GP0 = buzzer. NAO ligar cabo aqui.
 BUZZER.duty_u16(0)
 
-# Cables fisicos: pin conectado a GND = intacto (LOW), suelto = cortado (HIGH)
-# GP1=AZUL  GP2=MARRON  GP3=AMARILLO  GP4=VERDE  GP5=ROJO
+# Cabos fisicos: pino ligado ao GND = intacto (LOW), solto = cortado (HIGH)
+# GP1=AZUL  GP2=CASTANHO  GP3=AMARELO  GP4=VERDE  GP5=VERMELHO
 WIRE_PINS = [
     Pin(1, Pin.IN, Pin.PULL_UP),
     Pin(2, Pin.IN, Pin.PULL_UP),
@@ -43,15 +43,18 @@ GRY = display.create_pen(100, 100, 100)
 BRN = display.create_pen(140, 80,  30)
 
 # Indice 0=GP1 ... 4=GP5
-C_AZUL, C_MARRON, C_AMARILLO, C_VERDE, C_ROJO = 0, 1, 2, 3, 4
-WIRE_NAMES = ["AZUL",  "MARRON", "AMARILLO", "VERDE", "ROJO"]
-WIRE_PENS  = [BLU,     BRN,      YEL,        GRN,     RED]
+C_AZUL, C_CASTANHO, C_AMARELO, C_VERDE, C_VERMELHO = 0, 1, 2, 3, 4
+WIRE_NAMES = ["AZUL",  "CASTANHO", "AMARELO", "VERDE", "VERMELHO"]
+WIRE_PENS  = [BLU,     BRN,        YEL,       GRN,     RED]
 
+# Simon: botoes A (cima-esq) B (baixo-esq) X (cima-dir) Y (baixo-dir)
 SIMON_PENS  = [RED, BLU, GRN, YEL]
 SIMON_FREQ  = [440, 550, 660, 770]
-SIMON_POS   = [(15, 40), (15, 140), (125, 40), (125, 140)]
-SIMON_NAMES = ["A", "B", "X", "Y"]
+SIMON_POS   = [(15, 35), (15, 135), (125, 35), (125, 135)]
+SIMON_NAMES = ["A",  "B",  "X",  "Y"]
 
+# Tabela Simon: (serial_par, erros_max2) -> {cor: botao_esperado}
+# Cores: 0=VERM 1=AZ 2=VERDE 3=AMAR | Botoes: 0=A 1=B 2=X 3=Y
 SIMON_TABLE = {
     (True,  0): {0:0, 1:1, 2:2, 3:3},
     (True,  1): {0:1, 1:0, 2:3, 3:2},
@@ -68,7 +71,7 @@ WORDS = [
 ]
 
 # =============================================================
-# UTILIDADES
+# UTILITARIOS
 # =============================================================
 def beep(f=880, ms=80):
     BUZZER.freq(max(1, f))
@@ -110,35 +113,35 @@ def tl(state):
 
 def draw_hdr(state):
     display.set_pen(BLK)
-    display.rectangle(0, 0, W, 28)
+    display.rectangle(0, 0, W, 30)
     sec = tl(state)
     m, s = sec // 60, sec % 60
     col = RED if sec < 60 else (YEL if sec < 120 else GRN)
-    txt("{:02d}:{:02d}".format(m, s), 8, 5, 2, col)
-    txt("#"+state["serial"], 95, 5, 2, WHT)
-    txt("X"*state["strikes"], 195, 5, 2, RED)
+    txt("{:02d}:{:02d}".format(m, s), 8, 6, 2, col)
+    txt("#"+state["serial"], 95, 6, 2, WHT)
+    txt("X"*state["strikes"], 195, 6, 2, RED)
     display.set_pen(GRY)
-    display.line(0, 28, W, 28)
+    display.line(0, 30, W, 30)
 
 def show_ok(state):
     state["solved"] += 1
     clr(GRN)
-    txt("DESACTIVADO!", 20, 100, 3, WHT)
+    txt("DESATIVADO!", 20, 100, 3, WHT)
     upd()
     beep(880, 80); beep(1100, 80); beep(1320, 80)
     time.sleep(1)
 
-def show_fail(state, msg="FALLO!"):
+def show_fail(state, msg="FALHOU!"):
     state["strikes"] += 1
     clr(RED)
-    txt(msg, 30, 90, 3, WHT)
-    txt("Errores: "+str(state["strikes"]), 30, 150, 2, WHT)
+    txt(msg, 20, 90, 3, WHT)
+    txt("Erros: "+str(state["strikes"]), 30, 155, 2, WHT)
     upd()
     beep(220, 150); beep(180, 150)
     time.sleep(2)
 
 # =============================================================
-# MODULO 1: CABLES FISICOS
+# MODULO 1: CABOS FISICOS
 # =============================================================
 def wires_rule(colors, n, odd):
     cnt = lambda c: colors.count(c)
@@ -147,29 +150,29 @@ def wires_rule(colors, n, odd):
             if colors[i] == c: return i
         return -1
     if n == 3:
-        if cnt(C_ROJO) == 0:                                return 1
-        if colors[n-1] == C_VERDE:                          return n-1
-        if cnt(C_AZUL) > 1:                                 return last_of(C_AZUL)
+        if cnt(C_VERMELHO) == 0:                                   return 1
+        if colors[n-1] == C_VERDE:                                 return n-1
+        if cnt(C_AZUL) > 1:                                        return last_of(C_AZUL)
         return n-1
     if n == 4:
-        if cnt(C_ROJO) > 1 and odd:                         return last_of(C_ROJO)
-        if colors[n-1] == C_AMARILLO and cnt(C_ROJO) == 0:  return 0
-        if cnt(C_AZUL) == 1:                                return 0
+        if cnt(C_VERMELHO) > 1 and odd:                            return last_of(C_VERMELHO)
+        if colors[n-1] == C_AMARELO and cnt(C_VERMELHO) == 0:      return 0
+        if cnt(C_AZUL) == 1:                                       return 0
         return 1
     # n == 5
-    if colors[n-1] == C_MARRON and odd:                     return 3
-    if cnt(C_ROJO) == 1 and cnt(C_AMARILLO) > 1:           return 0
-    if cnt(C_MARRON) == 0:                                  return 1
+    if colors[n-1] == C_CASTANHO and odd:                          return 3
+    if cnt(C_VERMELHO) == 1 and cnt(C_AMARELO) > 1:               return 0
+    if cnt(C_CASTANHO) == 0:                                       return 1
     return 0
 
-def mod_cables(state):
+def mod_cabos(state):
     connected = [i for i in range(5) if WIRE_PINS[i].value() == 0]
     if len(connected) < 3:
         clr(); draw_hdr(state)
-        txt("CABLES", 4, 34, 2, ORG)
-        txt("Conecta 3-5 cables", 8, 70, 2, WHT)
-        txt("GP1-GP5 a GND", 8, 100, 2, YEL)
-        txt("Y para saltar", 8, 200, 1, GRY)
+        txt("CABOS", 4, 36, 2, ORG)
+        txt("Liga 3-5 cabos", 8, 75, 2, WHT)
+        txt("GP1-GP5 ao GND", 8, 105, 2, YEL)
+        txt("Y para saltar", 8, 205, 1, GRY)
         upd()
         while read_btn() != "Y": time.sleep_ms(50)
         return
@@ -179,13 +182,13 @@ def mod_cables(state):
     correct_pin = connected[wires_rule(colors, n, state["serial_odd"])]
 
     clr(); draw_hdr(state)
-    txt("CABLES", 4, 34, 2, ORG)
+    txt("CABOS", 4, 36, 2, ORG)
     for i, ci in enumerate(colors):
-        y = 55 + i * 32
+        y = 58 + i * 32
         display.set_pen(WIRE_PENS[ci])
         display.rectangle(38, y+2, 155, 20)
         txt(str(i+1), 8, y, 2, WHT)
-    txt("Jala el cable correcto", 8, 228, 1, GRY)
+    txt("Puxa o cabo certo", 8, 228, 1, GRY)
     upd()
 
     init = [WIRE_PINS[i].value() for i in range(5)]
@@ -200,7 +203,7 @@ def mod_cables(state):
     if cut == correct_pin:
         show_ok(state)
     else:
-        show_fail(state, "CABLE MAL!")
+        show_fail(state, "CABO ERRADO!")
 
 # =============================================================
 # MODULO 2: SIMON
@@ -210,40 +213,62 @@ def simon_draw(hi=-1):
     for i in range(4):
         x, y = SIMON_POS[i]
         display.set_pen(SIMON_PENS[i] if hi == i else GRY)
-        display.rectangle(x, y, 85, 75)
+        display.rectangle(x, y, 85, 80)
         display.set_pen(BLK if hi == i else WHT)
-        txt(SIMON_NAMES[i], x+28, y+24, 3, BLK if hi == i else WHT)
+        txt(SIMON_NAMES[i], x+28, y+25, 3, BLK if hi == i else WHT)
 
 def mod_simon(state):
     seq = []
-    for _ in range(4):
+    for ronda in range(4):
         seq.append(random.randint(0, 3))
+
+        # --- Mostrar sequencia ---
         for ci in seq:
             if tl(state) == 0: return
-            simon_draw(ci); draw_hdr(state)
-            txt("SIMON", 4, 5, 2, ORG); upd()
-            beep(SIMON_FREQ[ci], 280)
-            simon_draw(-1); draw_hdr(state)
-            txt("SIMON", 4, 5, 2, ORG); upd()
-            time.sleep_ms(150)
-        for ci in seq:
+            simon_draw(ci)
+            draw_hdr(state)
+            txt("OBSERVA", 75, 232, 1, GRY)
+            upd()
+            beep(SIMON_FREQ[ci], 350)
+            simon_draw(-1)
+            draw_hdr(state)
+            txt("OBSERVA", 75, 232, 1, GRY)
+            upd()
+            time.sleep_ms(250)
+
+        time.sleep_ms(300)
+
+        # --- Recolher input ---
+        for pos, ci in enumerate(seq):
             if tl(state) == 0: return
-            simon_draw(-1); draw_hdr(state)
-            txt("SIMON - repite", 4, 5, 2, ORG); upd()
+            simon_draw(-1)
+            draw_hdr(state)
+            txt("REPETE {}/{}".format(pos+1, len(seq)), 50, 232, 1, YEL)
+            upd()
+
             b = read_btn()
             bi = {"A":0,"B":1,"X":2,"Y":3}[b]
+
+            simon_draw(bi)
+            draw_hdr(state)
+            txt("REPETES {}/{}".format(pos+1, len(seq)), 50, 232, 1, YEL)
+            upd()
+            beep(SIMON_FREQ[bi], 100)
+            time.sleep_ms(150)
+
             key = (not state["serial_odd"], min(state["strikes"], 2))
             expected = SIMON_TABLE[key][ci]
-            simon_draw(bi); draw_hdr(state); upd()
-            beep(SIMON_FREQ[bi], 80); time.sleep_ms(100)
             if bi != expected:
                 show_fail(state, "SIMON!"); return
+
+        time.sleep_ms(500)
+
     show_ok(state)
 
 # =============================================================
-# MODULO 3: CONTRASENA
+# MODULO 3: SENHA
 # =============================================================
-def mod_password(state):
+def mod_senha(state):
     target = WORDS[random.randint(0, len(WORDS)-1)]
     cols = []
     for i in range(5):
@@ -260,11 +285,11 @@ def mod_password(state):
     while True:
         if tl(state) == 0: return
         clr(); draw_hdr(state)
-        txt("CONTRASENA", 4, 34, 2, ORG)
+        txt("SENHA", 4, 36, 2, ORG)
         for c in range(5):
             x = 8 + c*44
             for r in range(len(cols[c])):
-                y = 58 + r*26
+                y = 60 + r*26
                 if r == idx[c]:
                     display.set_pen(YEL)
                     display.rectangle(x-2, y-2, 36, 24)
@@ -272,7 +297,7 @@ def mod_password(state):
                 txt(cols[c][r], x+4, y+2, 2, pen)
             if c == sel:
                 display.set_pen(GRN)
-                display.line(x-2, 55, x+34, 55)
+                display.line(x-2, 57, x+34, 57)
         txt("A^ Bv X> Y=OK", 8, 228, 1, GRY)
         upd()
         b = read_btn()
@@ -282,24 +307,24 @@ def mod_password(state):
         elif b == "Y":
             word = "".join(cols[c][idx[c]] for c in range(5))
             if word in WORDS: show_ok(state); return
-            else:             show_fail(state, "INCORRECTO!"); return
+            else:             show_fail(state, "ERRADA!"); return
 
 # =============================================================
-# BUCLE PRINCIPAL
+# CICLO PRINCIPAL
 # =============================================================
-MODULES = [mod_cables, mod_simon, mod_password]
+MODULES = [mod_cabos, mod_simon, mod_senha]
 
-def title():
+def titulo():
     clr()
     txt("KEEP TALKING", 14, 40, 3, RED)
     txt("& NOBODY", 40, 90, 3, WHT)
     txt("EXPLODES", 40, 130, 3, WHT)
-    txt("Cables GP1-GP5 a GND", 14, 175, 2, YEL)
-    txt("Y para empezar", 20, 205, 2, GRN)
+    txt("Cabos GP1-GP5 ao GND", 10, 175, 2, YEL)
+    txt("Y para comecar", 25, 205, 2, GRN)
     upd()
     while read_btn() != "Y": pass
 
-def run_game():
+def jogar():
     serial = "{:04d}".format(random.randint(1000, 9999))
     state = {
         "serial": serial,
@@ -318,9 +343,9 @@ def run_game():
 
     won = state["solved"] >= len(MODULES) and state["strikes"] < 3 and tl(state) > 0
     clr(GRN if won else RED)
-    txt("GANASTE!" if won else "BOOM...", 25, 80, 4, WHT)
-    txt("Errores: "+str(state["strikes"]), 25, 150, 2, WHT)
-    txt("Y para reiniciar", 25, 190, 2, WHT)
+    txt("GANHOU!" if won else "BOOM...", 30, 80, 4, WHT)
+    txt("Erros: "+str(state["strikes"]), 30, 155, 2, WHT)
+    txt("Y para reiniciar", 20, 195, 2, WHT)
     upd()
     for _ in range(4):
         beep(1200 if won else 180, 180)
@@ -330,11 +355,11 @@ def run_game():
 
 while True:
     try:
-        title()
-        run_game()
+        titulo()
+        jogar()
     except Exception as e:
         clr(RED)
-        txt("ERROR", 50, 70, 4, WHT)
+        txt("ERRO", 60, 70, 4, WHT)
         err = str(e)
         txt(err[:22], 8, 145, 1, WHT)
         txt(err[22:44], 8, 162, 1, WHT)
