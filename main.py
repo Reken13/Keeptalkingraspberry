@@ -16,7 +16,7 @@ BTN_B = Pin(13, Pin.IN, Pin.PULL_UP)
 BTN_X = Pin(14, Pin.IN, Pin.PULL_UP)
 BTN_Y = Pin(15, Pin.IN, Pin.PULL_UP)
 
-BUZZER = PWM(Pin(0))   # GP0 = buzzer. NAO ligar cabo aqui.
+BUZZER = PWM(Pin(0))
 BUZZER.duty_u16(0)
 
 # Cabos fisicos: pino ligado ao GND = intacto (LOW), solto = cortado (HIGH)
@@ -42,19 +42,18 @@ ORG = display.create_pen(240, 130, 0)
 GRY = display.create_pen(100, 100, 100)
 BRN = display.create_pen(140, 80,  30)
 
-# Indice 0=GP1 ... 4=GP5
-C_AZUL, C_CASTANHO, C_AMARELO, C_VERDE, C_VERMELHO = 0, 1, 2, 3, 4
-WIRE_NAMES = ["AZUL",  "CASTANHO", "AMARELO", "VERDE", "VERMELHO"]
-WIRE_PENS  = [BLU,     BRN,        YEL,       GRN,     RED]
+# Paleta de cores para os cabos (atribuidas aleatoriamente a cada ronda)
+C_VERMELHO, C_AZUL, C_AMARELO, C_VERDE, C_CASTANHO = 0, 1, 2, 3, 4
+WIRE_NAMES = ["VERMELHO", "AZUL", "AMARELO", "VERDE", "CASTANHO"]
+WIRE_PENS  = [RED,        BLU,    YEL,       GRN,     BRN]
 
-# Simon: botoes A (cima-esq) B (baixo-esq) X (cima-dir) Y (baixo-dir)
 SIMON_PENS  = [RED, BLU, GRN, YEL]
 SIMON_FREQ  = [440, 550, 660, 770]
 SIMON_POS   = [(15, 35), (15, 135), (125, 35), (125, 135)]
-SIMON_NAMES = ["A",  "B",  "X",  "Y"]
+SIMON_NAMES = ["A", "B", "X", "Y"]
 
-# Tabela Simon: (serial_par, erros_max2) -> {cor: botao_esperado}
-# Cores: 0=VERM 1=AZ 2=VERDE 3=AMAR | Botoes: 0=A 1=B 2=X 3=Y
+# Tabela Simon: (serial_par, erros_max2) -> {cor_mostrada: botao_esperado}
+# cores: 0=VERM 1=AZ 2=VERDE 3=AMAR | botoes: 0=A 1=B 2=X 3=Y
 SIMON_TABLE = {
     (True,  0): {0:0, 1:1, 2:2, 3:3},
     (True,  1): {0:1, 1:0, 2:3, 3:2},
@@ -141,33 +140,43 @@ def show_fail(state, msg="FALHOU!"):
     time.sleep(2)
 
 # =============================================================
-# MODULO 1: CABOS FISICOS
+# MODULO 1: CABOS
+# Cores atribuidas aleatoriamente a cada ronda (podem repetir).
+# O desativador descreve o que ve; o especialista aplica as regras.
+# O cabo fisico a puxar corresponde a posicao na lista (1=primeiro, etc.)
 # =============================================================
 def wires_rule(colors, n, odd):
-    cnt = lambda c: colors.count(c)
+    """Devolve o indice (0-based) do cabo correto a cortar."""
+    cnt  = lambda c: colors.count(c)
     def last_of(c):
         for i in range(n-1, -1, -1):
             if colors[i] == c: return i
         return -1
+
     if n == 3:
-        if cnt(C_VERMELHO) == 0:                                   return 1
-        if colors[n-1] == C_VERDE:                                 return n-1
-        if cnt(C_AZUL) > 1:                                        return last_of(C_AZUL)
+        if cnt(C_VERMELHO) == 0:                                    return 1
+        if colors[-1] == C_VERDE:                                   return n-1
+        if cnt(C_AZUL) > 1:                                         return last_of(C_AZUL)
         return n-1
+
     if n == 4:
-        if cnt(C_VERMELHO) > 1 and odd:                            return last_of(C_VERMELHO)
-        if colors[n-1] == C_AMARELO and cnt(C_VERMELHO) == 0:      return 0
-        if cnt(C_AZUL) == 1:                                       return 0
+        if cnt(C_VERMELHO) > 1 and odd:                             return last_of(C_VERMELHO)
+        if colors[-1] == C_AMARELO and cnt(C_VERMELHO) == 0:        return 0
+        if cnt(C_AZUL) == 1:                                        return 0
         return 1
+
     # n == 5
-    if colors[n-1] == C_CASTANHO and odd:                          return 3
-    if cnt(C_VERMELHO) == 1 and cnt(C_AMARELO) > 1:               return 0
-    if cnt(C_CASTANHO) == 0:                                       return 1
+    if colors[-1] == C_CASTANHO and odd:                            return 3
+    if cnt(C_VERMELHO) == 1 and cnt(C_AMARELO) > 1:                return 0
+    if cnt(C_CASTANHO) == 0:                                        return 1
     return 0
 
 def mod_cabos(state):
+    # Detetar cabos fisicamente ligados ao GND
     connected = [i for i in range(5) if WIRE_PINS[i].value() == 0]
-    if len(connected) < 3:
+    n = len(connected)
+
+    if n < 3:
         clr(); draw_hdr(state)
         txt("CABOS", 4, 36, 2, ORG)
         txt("Liga 3-5 cabos", 8, 75, 2, WHT)
@@ -177,20 +186,27 @@ def mod_cabos(state):
         while read_btn() != "Y": time.sleep_ms(50)
         return
 
-    n = len(connected)
-    colors = connected[:]
-    correct_pin = connected[wires_rule(colors, n, state["serial_odd"])]
+    # Atribuir cores aleatorias a cada posicao conectada.
+    # As cores podem repetir — e isso e intencional (muda as regras aplicadas).
+    colors = [random.randint(0, 4) for _ in range(n)]
 
+    correct_idx = wires_rule(colors, n, state["serial_odd"])
+    correct_pin = connected[correct_idx]
+
+    # Mostrar cabos no ecra: numero + barra colorida + nome da cor
     clr(); draw_hdr(state)
     txt("CABOS", 4, 36, 2, ORG)
+    row_h = min(32, (195 // n))
     for i, ci in enumerate(colors):
-        y = 58 + i * 32
+        y = 38 + row_h + i * row_h
         display.set_pen(WIRE_PENS[ci])
-        display.rectangle(38, y+2, 155, 20)
+        display.rectangle(30, y, 120, row_h - 4)
         txt(str(i+1), 8, y, 2, WHT)
+        txt(WIRE_NAMES[ci], 155, y + 2, 1, WIRE_PENS[ci])
     txt("Puxa o cabo certo", 8, 228, 1, GRY)
     upd()
 
+    # Aguardar que um cabo seja puxado (LOW->HIGH)
     init = [WIRE_PINS[i].value() for i in range(5)]
     cut = None
     while cut is None:
@@ -219,46 +235,33 @@ def simon_draw(hi=-1):
 
 def mod_simon(state):
     seq = []
-    for ronda in range(4):
+    for _ in range(4):
         seq.append(random.randint(0, 3))
 
-        # --- Mostrar sequencia ---
         for ci in seq:
             if tl(state) == 0: return
-            simon_draw(ci)
-            draw_hdr(state)
-            txt("OBSERVA", 75, 232, 1, GRY)
-            upd()
+            simon_draw(ci); draw_hdr(state)
+            txt("OBSERVA", 75, 232, 1, GRY); upd()
             beep(SIMON_FREQ[ci], 350)
-            simon_draw(-1)
-            draw_hdr(state)
-            txt("OBSERVA", 75, 232, 1, GRY)
-            upd()
+            simon_draw(-1); draw_hdr(state)
+            txt("OBSERVA", 75, 232, 1, GRY); upd()
             time.sleep_ms(250)
 
         time.sleep_ms(300)
 
-        # --- Recolher input ---
         for pos, ci in enumerate(seq):
             if tl(state) == 0: return
-            simon_draw(-1)
-            draw_hdr(state)
-            txt("REPETE {}/{}".format(pos+1, len(seq)), 50, 232, 1, YEL)
-            upd()
+            simon_draw(-1); draw_hdr(state)
+            txt("REPETE {}/{}".format(pos+1, len(seq)), 50, 232, 1, YEL); upd()
 
             b = read_btn()
             bi = {"A":0,"B":1,"X":2,"Y":3}[b]
-
-            simon_draw(bi)
-            draw_hdr(state)
-            txt("REPETES {}/{}".format(pos+1, len(seq)), 50, 232, 1, YEL)
-            upd()
-            beep(SIMON_FREQ[bi], 100)
-            time.sleep_ms(150)
+            simon_draw(bi); draw_hdr(state)
+            txt("REPETE {}/{}".format(pos+1, len(seq)), 50, 232, 1, YEL); upd()
+            beep(SIMON_FREQ[bi], 100); time.sleep_ms(150)
 
             key = (not state["serial_odd"], min(state["strikes"], 2))
-            expected = SIMON_TABLE[key][ci]
-            if bi != expected:
+            if bi != SIMON_TABLE[key][ci]:
                 show_fail(state, "SIMON!"); return
 
         time.sleep_ms(500)
@@ -298,8 +301,7 @@ def mod_senha(state):
             if c == sel:
                 display.set_pen(GRN)
                 display.line(x-2, 57, x+34, 57)
-        txt("A^ Bv X> Y=OK", 8, 228, 1, GRY)
-        upd()
+        txt("A^ Bv X> Y=OK", 8, 228, 1, GRY); upd()
         b = read_btn()
         if   b == "A": idx[sel] = (idx[sel]-1) % len(cols[sel])
         elif b == "B": idx[sel] = (idx[sel]+1) % len(cols[sel])
