@@ -19,7 +19,6 @@ BTN_Y = Pin(15, Pin.IN, Pin.PULL_UP)
 BUZZER = PWM(Pin(0))
 BUZZER.duty_u16(0)
 
-# Cabos fisicos: pino ligado ao GND = intacto (LOW), solto = cortado (HIGH)
 # GP1=AZUL  GP2=CASTANHO  GP3=AMARELO  GP4=VERDE  GP5=VERMELHO
 WIRE_PINS = [
     Pin(1, Pin.IN, Pin.PULL_UP),
@@ -42,18 +41,15 @@ ORG = display.create_pen(240, 130, 0)
 GRY = display.create_pen(100, 100, 100)
 BRN = display.create_pen(140, 80,  30)
 
-# Paleta de cores para os cabos (atribuidas aleatoriamente a cada ronda)
-C_VERMELHO, C_AZUL, C_AMARELO, C_VERDE, C_CASTANHO = 0, 1, 2, 3, 4
-WIRE_NAMES = ["VERMELHO", "AZUL", "AMARELO", "VERDE", "CASTANHO"]
-WIRE_PENS  = [RED,        BLU,    YEL,       GRN,     BRN]
+# Mapeamento fixo: indice do pino -> cor fisica do cabo
+WIRE_NAMES = ["AZUL",  "CASTANHO", "AMARELO", "VERDE", "VERMELHO"]
+WIRE_PENS  = [BLU,     BRN,        YEL,       GRN,     RED]
 
 SIMON_PENS  = [RED, BLU, GRN, YEL]
 SIMON_FREQ  = [440, 550, 660, 770]
 SIMON_POS   = [(15, 35), (15, 135), (125, 35), (125, 135)]
 SIMON_NAMES = ["A", "B", "X", "Y"]
 
-# Tabela Simon: (serial_par, erros_max2) -> {cor_mostrada: botao_esperado}
-# cores: 0=VERM 1=AZ 2=VERDE 3=AMAR | botoes: 0=A 1=B 2=X 3=Y
 SIMON_TABLE = {
     (True,  0): {0:0, 1:1, 2:2, 3:3},
     (True,  1): {0:1, 1:0, 2:3, 3:2},
@@ -140,39 +136,56 @@ def show_fail(state, msg="FALHOU!"):
     time.sleep(2)
 
 # =============================================================
-# MODULO 1: CABOS
-# Cores atribuidas aleatoriamente a cada ronda (podem repetir).
-# O desativador descreve o que ve; o especialista aplica as regras.
-# O cabo fisico a puxar corresponde a posicao na lista (1=primeiro, etc.)
+# MODULO 1: SEQUENCIA DE CABOS
+#
+# O ecra mostra todos os cabos ligados e a sequencia a puxar
+# (indicada com numeros de ordem sobre cada cabo).
+# O jogador puxa os cabos fisicamente na ordem correta.
+# Puxar o errado = erro imediato.
 # =============================================================
-def wires_rule(colors, n, odd):
-    """Devolve o indice (0-based) do cabo correto a cortar."""
-    cnt  = lambda c: colors.count(c)
-    def last_of(c):
-        for i in range(n-1, -1, -1):
-            if colors[i] == c: return i
-        return -1
+def draw_cables(connected, seq, step):
+    """
+    connected : lista de indices de pinos ligados
+    seq       : lista de indices (dentro de connected) que formam a sequencia
+    step      : quantos cabos da sequencia ja foram puxados corretamente
+    """
+    clr()
+    n = len(connected)
+    row_h = 185 // n
 
-    if n == 3:
-        if cnt(C_VERMELHO) == 0:                                    return 1
-        if colors[-1] == C_VERDE:                                   return n-1
-        if cnt(C_AZUL) > 1:                                         return last_of(C_AZUL)
-        return n-1
+    for row, pin_idx in enumerate(connected):
+        y = 38 + row * row_h
+        pen = WIRE_PENS[pin_idx]
 
-    if n == 4:
-        if cnt(C_VERMELHO) > 1 and odd:                             return last_of(C_VERMELHO)
-        if colors[-1] == C_AMARELO and cnt(C_VERMELHO) == 0:        return 0
-        if cnt(C_AZUL) == 1:                                        return 0
-        return 1
+        # Determinar a posicao desta sequencia (1-based), se existir
+        seq_pos = None
+        for k, s in enumerate(seq):
+            if s == row:          # row = posicao dentro de connected
+                seq_pos = k + 1
+                break
 
-    # n == 5
-    if colors[-1] == C_CASTANHO and odd:                            return 3
-    if cnt(C_VERMELHO) == 1 and cnt(C_AMARELO) > 1:                return 0
-    if cnt(C_CASTANHO) == 0:                                        return 1
-    return 0
+        # Barra do cabo: cinzenta se ja puxado, colorida se ainda ativo
+        already_pulled = (seq_pos is not None and seq_pos <= step)
+        display.set_pen(GRY if already_pulled else pen)
+        display.rectangle(30, y + 2, 130, row_h - 6)
+
+        # Numero de ordem da sequencia
+        if seq_pos is not None:
+            label_col = GRY if already_pulled else BLK
+            txt(str(seq_pos), 40, y + (row_h - 6)//2 - 8, 2, label_col)
+
+        # Nome da cor a direita
+        name_col = GRY if already_pulled else WIRE_PENS[pin_idx]
+        txt(WIRE_NAMES[pin_idx], 165, y + 4, 1, name_col)
+
+    # Seta para o proximo cabo
+    if step < len(seq):
+        next_row = seq[step]
+        arrow_y = 38 + next_row * row_h + row_h // 2 - 8
+        txt(">", 8, arrow_y, 2, YEL)
+
 
 def mod_cabos(state):
-    # Detetar cabos fisicamente ligados ao GND
     connected = [i for i in range(5) if WIRE_PINS[i].value() == 0]
     n = len(connected)
 
@@ -186,40 +199,45 @@ def mod_cabos(state):
         while read_btn() != "Y": time.sleep_ms(50)
         return
 
-    # Atribuir cores aleatorias a cada posicao conectada.
-    # As cores podem repetir — e isso e intencional (muda as regras aplicadas).
-    colors = [random.randint(0, 4) for _ in range(n)]
+    # Gerar sequencia aleatoria: permutacao dos indices dentro de 'connected'
+    seq = list(range(n))
+    shuffle(seq)
+    # Usar apenas 3 cabos se houver 5 ligados (mais desafiante)
+    seq_len = 3 if n == 5 else n
+    seq = seq[:seq_len]
 
-    correct_idx = wires_rule(colors, n, state["serial_odd"])
-    correct_pin = connected[correct_idx]
-
-    # Mostrar cabos no ecra: numero + barra colorida + nome da cor
-    clr(); draw_hdr(state)
-    txt("CABOS", 4, 36, 2, ORG)
-    row_h = min(32, (195 // n))
-    for i, ci in enumerate(colors):
-        y = 38 + row_h + i * row_h
-        display.set_pen(WIRE_PENS[ci])
-        display.rectangle(30, y, 120, row_h - 4)
-        txt(str(i+1), 8, y, 2, WHT)
-        txt(WIRE_NAMES[ci], 155, y + 2, 1, WIRE_PENS[ci])
-    txt("Puxa o cabo certo", 8, 228, 1, GRY)
-    upd()
-
-    # Aguardar que um cabo seja puxado (LOW->HIGH)
+    step = 0          # quantos cabos da sequencia ja foram puxados
     init = [WIRE_PINS[i].value() for i in range(5)]
-    cut = None
-    while cut is None:
-        if tl(state) == 0: return
-        time.sleep_ms(30)
-        for i in range(5):
-            if WIRE_PINS[i].value() == 1 and init[i] == 0:
-                cut = i; break
 
-    if cut == correct_pin:
-        show_ok(state)
-    else:
-        show_fail(state, "CABO ERRADO!")
+    while step < seq_len:
+        if tl(state) == 0: return
+
+        draw_cables(connected, seq, step)
+        draw_hdr(state)
+        txt("CABOS  {}/{}".format(step, seq_len), 4, 36, 2, ORG)
+        upd()
+
+        # Esperar que um cabo seja puxado
+        pulled = None
+        while pulled is None:
+            if tl(state) == 0: return
+            time.sleep_ms(30)
+            for i in range(5):
+                if WIRE_PINS[i].value() == 1 and init[i] == 0:
+                    pulled = i
+                    init[i] = 1   # marcar como puxado
+                    break
+
+        # Verificar se o cabo puxado corresponde ao proximo da sequencia
+        expected_pin = connected[seq[step]]
+        if pulled == expected_pin:
+            beep(660 + step * 110, 80)
+            step += 1
+        else:
+            show_fail(state, "ORDEM ERRADA!")
+            return
+
+    show_ok(state)
 
 # =============================================================
 # MODULO 2: SIMON
