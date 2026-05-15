@@ -1,117 +1,116 @@
-# MANUAL DEL EXPERTO
+# MANUAL DO ESPECIALISTA
 
-> Imprime esta pagina antes de jugar.
-> NO puedes ver la pantalla del desactivador.
-> El desactivador te describe lo que ve. Tu le dices que hacer.
+> Imprime esta página antes de jogar.
+> **Não podes ver o ecrã do desativador.**
+> O desativador descreve o que vê. Tu dizes o que fazer.
 
 ---
 
-## INFORMACION GENERAL
+## INFORMAÇÃO GERAL
 
-En la parte superior de la pantalla el desactivador siempre ve:
+No topo do ecrã o desativador vê sempre:
 
 ```
-MM:SS  #XXXX  [errores]
+MM:SS  #XXXX  [erros]
 ```
 
-- `MM:SS` — tiempo restante
-- `#XXXX` — numero de serie (4 digitos)
-- `X` / `XX` / `XXX` — errores (3 = pierde)
+- `MM:SS` — tempo restante
+- `#XXXX` — número de série (4 algarismos)
+- `X` / `XX` / `XXX` — erros (3 = explosão)
 
-### Serial impar vs par
+### Serial ímpar vs par
 
-Suma los 4 digitos del serial.
-- Suma impar → **serial impar**
-- Suma par   → **serial par**
+Soma os 4 algarismos do número de série.
+- Soma ímpar → **serial ímpar**
+- Soma par   → **serial par**
 
-Ejemplos:
+Exemplos:
 - `#3742` → 3+7+4+2 = 16 → **par**
-- `#1531` → 1+5+3+1 = 10 → **par**
-- `#2513` → 2+5+1+3 = 11 → **impar**
+- `#2513` → 2+5+1+3 = 11 → **ímpar**
 
 ---
 
-## MODULO: CABLES
+## MÓDULO: CABOS
 
-El desactivador ve entre 3 y 5 cables de colores, numerados de arriba a abajo.
-Te dice cuantos hay y de que colores, en orden.
+O desativador vê entre 3 e 5 cabos coloridos, numerados de cima para baixo.
+Diz-te quantos são e as cores, por ordem.
 
-### 3 cables
+### 3 cabos
 
-| Condicion                          | Cortar        |
-|------------------------------------|---------------|
-| No hay ningun ROJO                 | Cable 2       |
-| El ultimo cable es VERDE           | Ultimo cable  |
-| Hay mas de 1 AZUL                  | Ultimo AZUL   |
-| (ninguna anterior)                 | Ultimo cable  |
+| Condição                              | Cortar        |
+|---------------------------------------|---------------|
+| Não há nenhum VERMELHO                | Cabo 2        |
+| O último cabo é VERDE                 | Último cabo   |
+| Há mais de 1 AZUL                     | Último AZUL   |
+| (nenhuma das anteriores)              | Último cabo   |
 
-### 4 cables
+### 4 cabos
 
-| Condicion                                    | Cortar        |
-|----------------------------------------------|---------------|
-| Mas de 1 ROJO **y** serial impar             | Ultimo ROJO   |
-| Ultimo es AMARILLO **y** no hay ROJO         | Cable 1       |
-| Exactamente 1 AZUL                           | Cable 1       |
-| (ninguna anterior)                           | Cable 2       |
+| Condição                                        | Cortar           |
+|-------------------------------------------------|------------------|
+| Mais de 1 VERMELHO **e** serial ímpar           | Último VERMELHO  |
+| Último é AMARELO **e** não há VERMELHO          | Cabo 1           |
+| Exatamente 1 AZUL                               | Cabo 1           |
+| (nenhuma das anteriores)                        | Cabo 2           |
 
-### 5 cables
+### 5 cabos
 
-| Condicion                                    | Cortar        |
-|----------------------------------------------|---------------|
-| Ultimo es MARRON **y** serial impar          | Cable 4       |
-| Exactamente 1 ROJO **y** mas de 1 AMARILLO  | Cable 1       |
-| No hay ningun MARRON                         | Cable 2       |
-| (ninguna anterior)                           | Cable 1       |
+| Condição                                          | Cortar   |
+|---------------------------------------------------|----------|
+| Último é CASTANHO **e** serial ímpar              | Cabo 4   |
+| Exatamente 1 VERMELHO **e** mais de 1 AMARELO    | Cabo 1   |
+| Não há nenhum CASTANHO                            | Cabo 2   |
+| (nenhuma das anteriores)                          | Cabo 1   |
 
 ---
 
-## MODULO: SIMON
+## MÓDULO: SIMON
 
-El desactivador ve 4 cuadros de colores que se iluminan en secuencia.
-Debe repetir la secuencia pulsando los botones correctos.
+O desativador vê 4 quadrados coloridos (VERMELHO, AZUL, VERDE, AMARELO) que piscam em sequência.
+Deve repetir a sequência carregando nos botões corretos.
 
-**Los botones NO corresponden directamente a los colores.**
-La correspondencia cambia segun el serial y los errores acumulados.
+**Os botões não correspondem diretamente às cores.**
+A correspondência muda conforme o serial e os erros acumulados.
 
 ### Serial PAR
 
-| Errores | ROJO | AZUL | VERDE | AMARILLO |
-|---------|------|------|-------|----------|
-| 0       | A    | B    | X     | Y        |
-| 1       | B    | A    | Y     | X        |
-| 2+      | X    | Y    | A     | B        |
+| Erros | VERMELHO | AZUL | VERDE | AMARELO |
+|-------|----------|------|-------|---------|
+| 0     | A        | B    | X     | Y       |
+| 1     | B        | A    | Y     | X       |
+| 2+    | X        | Y    | A     | B       |
 
-### Serial IMPAR
+### Serial ÍMPAR
 
-| Errores | ROJO | AZUL | VERDE | AMARILLO |
-|---------|------|------|-------|----------|
-| 0       | B    | X    | Y     | A        |
-| 1       | X    | Y    | A     | B        |
-| 2+      | Y    | A    | B     | X        |
+| Erros | VERMELHO | AZUL | VERDE | AMARELO |
+|-------|----------|------|-------|---------|
+| 0     | B        | X    | Y     | A       |
+| 1     | X        | Y    | A     | B       |
+| 2+    | Y        | A    | B     | X       |
 
-**Como usarlo:**
-1. El desactivador dice el color que se ilumina.
-2. Tu buscas en la tabla y le dices que boton pulsar.
-3. Se repite para cada color de la secuencia.
-4. La secuencia crece 1 color por ronda (hasta 4 rondas).
+**Como usar:**
+1. O desativador diz a cor que pisca.
+2. Tu procuras na tabela e dizes que botão carregar.
+3. Repete para cada cor da sequência.
+4. A sequência cresce 1 cor por ronda (até 4 rondas).
 
 ---
 
-## MODULO: CONTRASENA
+## MÓDULO: SENHA
 
-El desactivador ve 5 columnas de letras. Cada columna tiene una letra resaltada.
-Debe formar una palabra valida de 5 letras.
+O desativador vê 5 colunas de letras, com uma letra destacada em cada coluna.
+Tem de formar uma palavra válida de 5 letras.
 
-### Controles del desactivador
+### Controlos do desativador
 
-| Boton | Accion                        |
-|-------|-------------------------------|
-| A     | Subir letra en columna actual |
-| B     | Bajar letra en columna actual |
-| X     | Pasar a la siguiente columna  |
-| Y     | Confirmar la palabra          |
+| Botão | Ação                            |
+|-------|---------------------------------|
+| A     | Subir letra na coluna atual     |
+| B     | Descer letra na coluna atual    |
+| X     | Passar para a próxima coluna    |
+| Y     | Confirmar a palavra             |
 
-### Palabras validas
+### Palavras válidas
 
 ```
 ABOUT   AFTER   COULD   EVERY   FIRST
@@ -121,7 +120,7 @@ THING   THINK   THREE   WATER   WHERE
 WORLD
 ```
 
-**Como ayudar:**
-- El desactivador te dice que letras son posibles en cada posicion.
-- Tu buscas en la lista cual de las palabras encaja.
-- Le dices que letra poner en cada columna.
+**Como ajudar:**
+- O desativador diz-te que letras aparecem em cada posição.
+- Tu procuras qual das palavras encaixa.
+- Dizes qual letra colocar em cada coluna.
