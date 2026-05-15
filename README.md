@@ -1,84 +1,71 @@
 # Keep Talking and Nobody Explodes – Pico Explorer
 
-Version fisica del juego cooperativo con Raspberry Pi Pico y Pimoroni Pico Explorer.
+Versão física do jogo cooperativo com Raspberry Pi Pico e Pimoroni Pico Explorer.
 
-## Como jugar
+## Como jogar
 
-- El **desactivador** ve la pantalla y describe lo que ve.
-- El **experto** tiene el manual (`manual.md`) impreso y dice que hacer.
-- El experto NO puede ver la pantalla.
-- 3 errores o tiempo agotado = explosion. Resolver los 3 modulos = victoria.
+- O **desativador** vê o ecrã e descreve o que vê.
+- O **especialista** tem o manual (`manual.md`) impresso e diz o que fazer.
+- O especialista **não pode ver o ecrã**.
+- 3 erros ou tempo esgotado = explosão. Resolver os 3 módulos = vitória.
 
 ---
 
-## Hardware necesario
+## Hardware necessário
 
 - Pimoroni Pico Explorer Base
-- Raspberry Pi Pico o Pico W (con firmware Pimoroni MicroPython)
-- 5 cables jumper de colores
+- Raspberry Pi Pico ou Pico W (com firmware Pimoroni MicroPython)
+- 5 cabos jumper de cores diferentes
 
 ---
 
-## Conexion de cables
+## Ligação dos cabos
 
-> **NO conectar nada a GP0** — reservado para el buzzer interno.
+> **NÃO ligar nada ao GP0** — reservado para o buzzer interno.
 
-| Pin  | Color cable | Otro extremo |
-|------|-------------|--------------|
-| GP1  | MARRON      | GND          |
-| GP2  | VERDE       | GND          |
-| GP3  | AMARILLO    | GND          |
-| GP4  | ROJO        | GND          |
-| GP5  | AZUL        | GND          |
+| Pino | Cor do cabo | Outro extremo |
+|------|-------------|---------------|
+| GP1  | AZUL        | GND           |
+| GP2  | CASTANHO    | GND           |
+| GP3  | AMARELO     | GND           |
+| GP4  | VERDE       | GND           |
+| GP5  | VERMELHO    | GND           |
 
-Cable enchufado (pin conectado a GND) = cable intacto.
-Jalar el cable fisicamente = cortarlo en el juego.
-
----
-
-## Instalacion
-
-1. Instalar [firmware Pimoroni MicroPython](https://github.com/pimoroni/pimoroni-pico/releases) en la Pico
-2. Abrir Thonny y conectar la Pico
-3. Abrir `main.py` y guardarlo en la Pico: `File > Save as > Raspberry Pi Pico`
-4. Reiniciar la Pico — el juego arranca automaticamente
+Cabo ligado (pino ao GND) = cabo intacto.
+Puxar o cabo = cortá-lo no jogo.
 
 ---
 
-## Modulos del juego
+## Instalação
 
-| Modulo     | Descripcion                                                   |
-|------------|---------------------------------------------------------------|
-| CABLES     | Desactivador describe colores, experto dice cual cortar       |
-| SIMON      | Memoriza y repite secuencia de colores con los botones        |
-| CONTRASENA | Forma una palabra valida navegando con los botones            |
-
----
-
-## Controles (botones del Pico Explorer)
-
-| Boton | Uso general                        |
-|-------|------------------------------------|
-| A     | Subir / seleccionar                |
-| B     | Bajar                              |
-| X     | Siguiente columna                  |
-| Y     | Confirmar / Empezar / Reiniciar    |
+1. Instalar [firmware Pimoroni MicroPython](https://github.com/pimoroni/pimoroni-pico/releases) no Pico
+2. Abrir Thonny e ligar o Pico
+3. Abrir `main.py` e guardar no Pico: `File > Save as > Raspberry Pi Pico`
+4. Reiniciar o Pico — o jogo arranca automaticamente
 
 ---
 
-## Pantalla durante el juego
+## Módulos do jogo
 
-```
-04:32  #7341  XX
-─────────────────
-```
-
-- `04:32` — tiempo restante (verde → amarillo → rojo)
-- `#7341` — numero de serie de la bomba (para las reglas)
-- `XX`    — errores acumulados (3 = explosion)
+| Módulo  | Descrição                                                       |
+|---------|-----------------------------------------------------------------|
+| CABOS   | Desativador descreve as cores, especialista diz qual cortar     |
+| SIMON   | Memoriza e repete a sequência de cores com os botões            |
+| SENHA   | Forma uma palavra válida navegando com os botões                |
 
 ---
 
-## Manual del experto
+## Controlos
 
-Ver [`manual.md`](manual.md) — imprimelo antes de jugar.
+| Botão | Função                          |
+|-------|---------------------------------|
+| A     | Subir / selecionar              |
+| B     | Descer                          |
+| X     | Próxima coluna                  |
+| Y     | Confirmar / Começar / Reiniciar |
+
+---
+
+## Manual do especialista
+
+Ver [`manual.md`](manual.md) — imprime antes de jogar.
