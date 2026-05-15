@@ -1,6 +1,6 @@
 import time
 import random
-from machine import Pin, PWM
+from machine import Pin, PWM, ADC
 
 try:
     from picographics import PicoGraphics, DISPLAY_PICO_EXPLORER
@@ -28,6 +28,10 @@ WIRE_PINS = [
     Pin(5, Pin.IN, Pin.PULL_UP),
 ]
 
+joy_x   = ADC(26)
+joy_y   = ADC(27)
+joy_btn = Pin(28, Pin.IN, Pin.PULL_UP)
+
 display = PicoGraphics(display=DISPLAY_PICO_EXPLORER)
 W, H = display.get_bounds()
 
@@ -40,6 +44,7 @@ YEL = display.create_pen(240, 220, 0)
 ORG = display.create_pen(240, 130, 0)
 GRY = display.create_pen(100, 100, 100)
 BRN = display.create_pen(140, 80,  30)
+DGN = display.create_pen(0,   90,  0)   # verde escuro – caminho do labirinto
 
 WIRE_NAMES = ["AZUL",  "CASTANHO", "AMARELO", "VERDE", "VERMELHO"]
 WIRE_PENS  = [BLU,     BRN,        YEL,       GRN,     RED]
@@ -64,8 +69,16 @@ WORDS = [
     "THERE","THING","THINK","THREE","WATER","WHERE","WORLD",
 ]
 
+# Configuração do labirinto
+MZ_COLS  = 7
+MZ_ROWS  = 7
+MZ_CELL  = 26
+MZ_OX    = (W - MZ_COLS * MZ_CELL - 1) // 2   # margem esquerda
+MZ_OY    = 40                                   # margem superior
+JOY_DEAD = 10000                                # zona morta do joystick
+
 # =============================================================
-# UTILITARIOS
+# UTILITÁRIOS
 # =============================================================
 def beep(f=880, ms=80):
     BUZZER.freq(max(1, f))
@@ -89,7 +102,8 @@ def txt(s, x, y, sc=2, c=WHT):
 def upd():
     display.update()
 
-def read_btn():
+def read_btn(state=None):
+    """Aguarda pressão de botão A/B/X/Y. Dispara beep periódico se state dado."""
     pairs = [(BTN_A,"A"),(BTN_B,"B"),(BTN_X,"X"),(BTN_Y,"Y")]
     while True:
         for pin, name in pairs:
@@ -100,6 +114,8 @@ def read_btn():
                         time.sleep_ms(10)
                     time.sleep_ms(30)
                     return name
+        if state:
+            maybe_beep(state)
         time.sleep_ms(20)
 
 def tl(state):
@@ -116,6 +132,19 @@ def draw_hdr(state):
     txt("X"*state["strikes"], 195, 6, 2, RED)
     display.set_pen(GRY)
     display.line(0, 30, W, 30)
+
+def maybe_beep(state):
+    """Beep periódico de tensão: cada 30 s normal, 10 s <60 s, 5 s <30 s."""
+    sec = tl(state)
+    if sec == 0:
+        return
+    now = time.time()
+    if   sec < 30: interval, freq = 5,  660
+    elif sec < 60: interval, freq = 10, 550
+    else:          interval, freq = 30, 440
+    if now - state.get("last_beep", 0) >= interval:
+        beep(freq, 40)
+        state["last_beep"] = now
 
 def show_ok(state):
     state["solved"] += 1
@@ -135,9 +164,196 @@ def show_fail(state, msg="FALHOU!"):
     time.sleep(2)
 
 # =============================================================
-# DIAGNOSTICO DE PINOS
-# Mostra o valor atual de cada pino (0=ligado ao GND, 1=solto).
-# Carrega A para sair.
+# JOYSTICK
+# =============================================================
+def joy_dir():
+    """Retorna (dr, dc) para cima/baixo/esq/dir, ou None se centrado."""
+    dx = joy_x.read_u16() - 32768
+    dy = joy_y.read_u16() - 32768
+    if abs(dx) > abs(dy):
+        if dx >  JOY_DEAD: return (0,  1)
+        if dx < -JOY_DEAD: return (0, -1)
+    else:
+        if dy >  JOY_DEAD: return ( 1, 0)
+        if dy < -JOY_DEAD: return (-1, 0)
+    return None
+
+def joy_wait_center():
+    while joy_dir() is not None:
+        time.sleep_ms(10)
+
+# =============================================================
+# LABIRINTO – GERAÇÃO (DFS iterativo)
+# =============================================================
+def gen_maze():
+    """Devolve (h_walls, v_walls).
+    h_walls[r][c] = parede abaixo de (r,c)
+    v_walls[r][c] = parede à direita de (r,c)
+    """
+    hw = [[True] * MZ_COLS for _ in range(MZ_ROWS - 1)]
+    vw = [[True] * (MZ_COLS - 1) for _ in range(MZ_ROWS)]
+    vis = [[False] * MZ_COLS for _ in range(MZ_ROWS)]
+    stk = [(0, 0)]
+    vis[0][0] = True
+    while stk:
+        r, c = stk[-1]
+        nb = []
+        if r > 0         and not vis[r-1][c]: nb.append((r-1, c))
+        if r < MZ_ROWS-1 and not vis[r+1][c]: nb.append((r+1, c))
+        if c > 0         and not vis[r][c-1]: nb.append((r, c-1))
+        if c < MZ_COLS-1 and not vis[r][c+1]: nb.append((r, c+1))
+        if nb:
+            nr, nc = nb[random.randint(0, len(nb) - 1)]
+            if   nr == r + 1: hw[r][c]   = False  # sul
+            elif nr == r - 1: hw[nr][c]  = False  # norte
+            elif nc == c + 1: vw[r][c]   = False  # este
+            else:              vw[r][nc]  = False  # oeste
+            vis[nr][nc] = True
+            stk.append((nr, nc))
+        else:
+            stk.pop()
+    return hw, vw
+
+def find_path(hw, vw):
+    """BFS de (0,0) até (MZ_ROWS-1, MZ_COLS-1). Devolve lista de células."""
+    end = (MZ_ROWS - 1, MZ_COLS - 1)
+    q = [(0, 0)]
+    came = {(0, 0): None}
+    while q:
+        r, c = q.pop(0)
+        if (r, c) == end:
+            break
+        if r > 0         and not hw[r-1][c] and (r-1,c) not in came:
+            came[(r-1,c)] = (r,c); q.append((r-1,c))
+        if r < MZ_ROWS-1 and not hw[r][c]   and (r+1,c) not in came:
+            came[(r+1,c)] = (r,c); q.append((r+1,c))
+        if c > 0         and not vw[r][c-1] and (r,c-1) not in came:
+            came[(r,c-1)] = (r,c); q.append((r,c-1))
+        if c < MZ_COLS-1 and not vw[r][c]   and (r,c+1) not in came:
+            came[(r,c+1)] = (r,c); q.append((r,c+1))
+    path = []; cur = end
+    while cur is not None:
+        path.append(cur); cur = came.get(cur)
+    path.reverse()
+    return path
+
+def can_move(hw, vw, r, c, dr, dc):
+    nr, nc = r + dr, c + dc
+    if not (0 <= nr < MZ_ROWS and 0 <= nc < MZ_COLS): return False
+    if dr ==  1 and hw[r][c]:   return False   # parede ao sul
+    if dr == -1 and hw[nr][c]:  return False   # parede ao norte
+    if dc ==  1 and vw[r][c]:   return False   # parede a leste
+    if dc == -1 and vw[r][nc]:  return False   # parede a oeste
+    return True
+
+# =============================================================
+# LABIRINTO – DESENHO
+# =============================================================
+def draw_maze(hw, vw, highlight=None):
+    ox, oy = MZ_OX, MZ_OY
+    # Pintar caminho (fase do experto)
+    if highlight:
+        display.set_pen(DGN)
+        for pr, pc in highlight:
+            display.rectangle(ox + pc*MZ_CELL + 1, oy + pr*MZ_CELL + 1,
+                               MZ_CELL - 1, MZ_CELL - 1)
+    # Bordas externas
+    display.set_pen(WHT)
+    display.line(ox, oy, ox + MZ_COLS*MZ_CELL, oy)
+    display.line(ox, oy + MZ_ROWS*MZ_CELL, ox + MZ_COLS*MZ_CELL, oy + MZ_ROWS*MZ_CELL)
+    display.line(ox, oy, ox, oy + MZ_ROWS*MZ_CELL)
+    display.line(ox + MZ_COLS*MZ_CELL, oy, ox + MZ_COLS*MZ_CELL, oy + MZ_ROWS*MZ_CELL)
+    # Paredes horizontais (abaixo de cada célula)
+    for r in range(MZ_ROWS - 1):
+        for c in range(MZ_COLS):
+            if hw[r][c]:
+                x1 = ox + c * MZ_CELL
+                y1 = oy + (r + 1) * MZ_CELL
+                display.line(x1, y1, x1 + MZ_CELL, y1)
+    # Paredes verticais (à direita de cada célula)
+    for r in range(MZ_ROWS):
+        for c in range(MZ_COLS - 1):
+            if vw[r][c]:
+                x1 = ox + (c + 1) * MZ_CELL
+                y1 = oy + r * MZ_CELL
+                display.line(x1, y1, x1, y1 + MZ_CELL)
+
+def draw_mz_cell(r, c, pen):
+    display.set_pen(pen)
+    display.rectangle(MZ_OX + c*MZ_CELL + 4, MZ_OY + r*MZ_CELL + 4,
+                      MZ_CELL - 8, MZ_CELL - 8)
+
+# =============================================================
+# MÓDULO 4: LABIRINTO COOPERATIVO
+# Experto vê o caminho (8 s) → Defusor navega com joystick.
+# Comunicam-se verbalmente: defusor diz a posição (linha,col),
+# experto guia a direção.
+# =============================================================
+def mod_labirinto(state):
+    hw, vw = gen_maze()
+    path   = find_path(hw, vw)
+
+    # ── Fase 1: experto memoriza ──────────────────────────────
+    t0 = time.time()
+    while time.time() - t0 < 8:
+        if tl(state) == 0: return
+        rem = int(8 - (time.time() - t0)) + 1
+        clr()
+        draw_hdr(state)
+        txt("EXPERTO VE | DEFUSOR: FECHA OLHOS", 4, 32, 1, YEL)
+        txt("{}s".format(rem), 210, 32, 1, RED)
+        draw_maze(hw, vw, path)
+        # marcador de inicio (azul) e saida (laranja)
+        display.set_pen(BLU)
+        display.rectangle(MZ_OX + 1, MZ_OY + 1, MZ_CELL - 2, MZ_CELL - 2)
+        display.set_pen(ORG)
+        display.rectangle(MZ_OX + (MZ_COLS-1)*MZ_CELL + 2,
+                          MZ_OY + (MZ_ROWS-1)*MZ_CELL + 2,
+                          MZ_CELL - 4, MZ_CELL - 4)
+        upd()
+        time.sleep_ms(200)
+
+    beep(660, 60); beep(880, 60)   # sinal de início
+    joy_wait_center()
+    pr, pc = 0, 0
+
+    # ── Fase 2: defusor navega ────────────────────────────────
+    while True:
+        maybe_beep(state)
+        if tl(state) == 0: return
+
+        clr()
+        draw_hdr(state)
+        txt("LABIRINTO", 4, 32, 1, ORG)
+        txt("({},{})".format(pr, pc), 155, 32, 1, GRY)
+        draw_maze(hw, vw)
+        # saida
+        display.set_pen(ORG)
+        display.rectangle(MZ_OX + (MZ_COLS-1)*MZ_CELL + 2,
+                          MZ_OY + (MZ_ROWS-1)*MZ_CELL + 2,
+                          MZ_CELL - 4, MZ_CELL - 4)
+        # jogador
+        draw_mz_cell(pr, pc, BLU)
+        upd()
+
+        if pr == MZ_ROWS - 1 and pc == MZ_COLS - 1:
+            show_ok(state)
+            return
+
+        jd = joy_dir()
+        if jd:
+            dr, dc = jd
+            if can_move(hw, vw, pr, pc, dr, dc):
+                pr += dr; pc += dc
+                beep(880, 20)
+            else:
+                beep(200, 60)   # bate na parede
+            joy_wait_center()
+
+        time.sleep_ms(25)
+
+# =============================================================
+# DIAGNÓSTICO DE PINOS
 # =============================================================
 def pin_diagnostics():
     while True:
@@ -145,9 +361,10 @@ def pin_diagnostics():
         txt("DIAGNOSTICO", 10, 10, 2, ORG)
         txt("0=GND  1=solto", 10, 35, 1, GRY)
         for i in range(5):
-            v = WIRE_PINS[i].value()
-            pen = GRN if v == 0 else RED
-            txt("GP{}  {}  {}".format(i+1, v, WIRE_NAMES[i]), 10, 60 + i*34, 2, pen)
+            vval = WIRE_PINS[i].value()
+            pen = GRN if vval == 0 else RED
+            txt("GP{}  {}  {}".format(i+1, vval, WIRE_NAMES[i]),
+                10, 60 + i*34, 2, pen)
         txt("A para sair", 10, 230, 1, GRY)
         upd()
         time.sleep_ms(200)
@@ -156,7 +373,7 @@ def pin_diagnostics():
             return
 
 # =============================================================
-# MODULO 1: SEQUENCIA DE CABOS
+# MÓDULO 1: SEQUÊNCIA DE CABOS
 # =============================================================
 def draw_cables(connected, seq, step):
     clr()
@@ -173,8 +390,10 @@ def draw_cables(connected, seq, step):
         display.set_pen(GRY if already else WIRE_PENS[pin_idx])
         display.rectangle(30, y + 2, 130, row_h - 6)
         if seq_pos is not None:
-            txt(str(seq_pos), 40, y + (row_h-6)//2 - 8, 2, GRY if already else BLK)
-        txt(WIRE_NAMES[pin_idx], 165, y + 4, 1, GRY if already else WIRE_PENS[pin_idx])
+            txt(str(seq_pos), 40, y + (row_h-6)//2 - 8, 2,
+                GRY if already else BLK)
+        txt(WIRE_NAMES[pin_idx], 165, y + 4, 1,
+            GRY if already else WIRE_PENS[pin_idx])
     if step < len(seq):
         arrow_y = 38 + seq[step] * row_h + row_h // 2 - 8
         txt(">", 8, arrow_y, 2, YEL)
@@ -188,15 +407,13 @@ def mod_cabos(state):
         txt("CABOS", 4, 36, 2, ORG)
         txt("Liga 3-5 cabos", 8, 75, 2, WHT)
         txt("GP1-GP5 ao GND", 8, 105, 2, YEL)
-        txt("", 0, 0, 1, BLK)
-        # Mostrar valores atuais dos pinos
         for i in range(5):
-            v = WIRE_PINS[i].value()
-            pen = GRN if v == 0 else RED
-            txt("GP{} = {}".format(i+1, v), 8, 135 + i*18, 1, pen)
+            vval = WIRE_PINS[i].value()
+            pen = GRN if vval == 0 else RED
+            txt("GP{} = {}".format(i+1, vval), 8, 135 + i*18, 1, pen)
         txt("A=diagnostico  Y=saltar", 8, 228, 1, GRY)
         upd()
-        b = read_btn()
+        b = read_btn(state)
         if b == "A":
             pin_diagnostics()
         return
@@ -210,6 +427,7 @@ def mod_cabos(state):
     init = [WIRE_PINS[i].value() for i in range(5)]
 
     while step < seq_len:
+        maybe_beep(state)
         if tl(state) == 0: return
         draw_cables(connected, seq, step)
         draw_hdr(state)
@@ -218,6 +436,7 @@ def mod_cabos(state):
 
         pulled = None
         while pulled is None:
+            maybe_beep(state)
             if tl(state) == 0: return
             time.sleep_ms(30)
             for i in range(5):
@@ -237,7 +456,7 @@ def mod_cabos(state):
     show_ok(state)
 
 # =============================================================
-# MODULO 2: SIMON
+# MÓDULO 2: SIMON
 # =============================================================
 def simon_draw(hi=-1):
     clr()
@@ -254,6 +473,7 @@ def mod_simon(state):
         seq.append(random.randint(0, 3))
         for ci in seq:
             if tl(state) == 0: return
+            maybe_beep(state)
             simon_draw(ci); draw_hdr(state)
             txt("OBSERVA", 75, 232, 1, GRY); upd()
             beep(SIMON_FREQ[ci], 350)
@@ -265,7 +485,7 @@ def mod_simon(state):
             if tl(state) == 0: return
             simon_draw(-1); draw_hdr(state)
             txt("REPETE {}/{}".format(pos+1, len(seq)), 50, 232, 1, YEL); upd()
-            b = read_btn()
+            b = read_btn(state)
             bi = {"A":0,"B":1,"X":2,"Y":3}[b]
             simon_draw(bi); draw_hdr(state)
             txt("REPETE {}/{}".format(pos+1, len(seq)), 50, 232, 1, YEL); upd()
@@ -277,7 +497,7 @@ def mod_simon(state):
     show_ok(state)
 
 # =============================================================
-# MODULO 3: SENHA
+# MÓDULO 3: SENHA
 # =============================================================
 def mod_senha(state):
     target = WORDS[random.randint(0, len(WORDS)-1)]
@@ -286,30 +506,31 @@ def mod_senha(state):
         ch = target[i]
         seen = {ch}; col = [ch]
         for w in WORDS:
-            c = w[i]
-            if c not in seen:
-                seen.add(c); col.append(c)
+            lc = w[i]
+            if lc not in seen:
+                seen.add(lc); col.append(lc)
         shuffle(col)
         cols.append(col[:6] if len(col) > 6 else col)
     idx = [0]*5; sel = 0
     while True:
+        maybe_beep(state)
         if tl(state) == 0: return
         clr(); draw_hdr(state)
         txt("SENHA", 4, 36, 2, ORG)
-        for c in range(5):
-            x = 8 + c*44
-            for r in range(len(cols[c])):
-                y = 60 + r*26
-                if r == idx[c]:
+        for col in range(5):
+            x = 8 + col*44
+            for row in range(len(cols[col])):
+                y = 60 + row*26
+                if row == idx[col]:
                     display.set_pen(YEL)
                     display.rectangle(x-2, y-2, 36, 24)
-                pen = BLK if r==idx[c] else (WHT if c==sel else GRY)
-                txt(cols[c][r], x+4, y+2, 2, pen)
-            if c == sel:
+                pen = BLK if row==idx[col] else (WHT if col==sel else GRY)
+                txt(cols[col][row], x+4, y+2, 2, pen)
+            if col == sel:
                 display.set_pen(GRN)
                 display.line(x-2, 57, x+34, 57)
         txt("A^ Bv X> Y=OK", 8, 228, 1, GRY); upd()
-        b = read_btn()
+        b = read_btn(state)
         if   b == "A": idx[sel] = (idx[sel]-1) % len(cols[sel])
         elif b == "B": idx[sel] = (idx[sel]+1) % len(cols[sel])
         elif b == "X": sel = (sel+1) % 5
@@ -321,7 +542,7 @@ def mod_senha(state):
 # =============================================================
 # CICLO PRINCIPAL
 # =============================================================
-MODULES = [mod_cabos, mod_simon, mod_senha]
+MODULES = [mod_cabos, mod_simon, mod_senha, mod_labirinto]
 
 def titulo():
     clr()
@@ -336,11 +557,12 @@ def titulo():
 def jogar():
     serial = "{:04d}".format(random.randint(1000, 9999))
     state = {
-        "serial": serial,
+        "serial":     serial,
         "serial_odd": (sum(int(c) for c in serial) % 2) == 1,
-        "strikes": 0,
-        "solved": 0,
-        "end": time.time() + 300,
+        "strikes":    0,
+        "solved":     0,
+        "end":        time.time() + 300,
+        "last_beep":  time.time(),   # referência para beeps periódicos
     }
     order = list(MODULES)
     shuffle(order)
